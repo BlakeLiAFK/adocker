@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build for Windows (amd64)
+        run: |
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o adocker-windows-amd64.exe
+
+      - name: Build for Windows (arm64)
+        run: |
+          GOOS=windows GOARCH=arm64 go build -ldflags="-s -w" -o adocker-windows-arm64.exe
+
+      - name: Build for Linux (amd64)
+        run: |
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o adocker-linux-amd64
+
+      - name: Build for Linux (arm64)
+        run: |
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o adocker-linux-arm64
+
+      - name: Build for macOS (amd64)
+        run: |
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o adocker-darwin-amd64
+
+      - name: Build for macOS (arm64/Apple Silicon)
+        run: |
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o adocker-darwin-arm64
+
+      - name: Calculate checksums
+        run: |
+          sha256sum adocker-* > checksums.txt
+          cat checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ steps.version.outputs.VERSION }}
+          body: |
+            ## adocker - Docker 镜像拉取工具 ${{ steps.version.outputs.VERSION }}
+
+            ### 功能特性
+            - 拉取镜像并导入到 Docker (`adocker pull`)
+            - 下载镜像并保存为 tar 文件 (`adocker dl`)
+            - 支持 Docker Hub 和自定义镜像仓库
+            - 支持多架构镜像 (默认 linux/amd64)
+
+            ### 下载说明
+
+            选择适合您系统的版本:
+
+            | 平台 | 架构 | 文件 |
+            |------|------|------|
+            | Windows | x64 | `adocker-windows-amd64.exe` |
+            | Windows | ARM64 | `adocker-windows-arm64.exe` |
+            | Linux | x64 | `adocker-linux-amd64` |
+            | Linux | ARM64 | `adocker-linux-arm64` |
+            | macOS | Intel | `adocker-darwin-amd64` |
+            | macOS | Apple Silicon | `adocker-darwin-arm64` |
+
+            ### 使用方法
+
+            ```bash
+            # Windows
+            adocker-windows-amd64.exe pull nginx
+
+            # Linux/macOS (需要添加执行权限)
+            chmod +x adocker-linux-amd64
+            ./adocker-linux-amd64 pull nginx
+            ```
+
+            ### 校验和
+            请查看 `checksums.txt` 文件验证下载文件的完整性。
+
+          files: |
+            adocker-windows-amd64.exe
+            adocker-windows-arm64.exe
+            adocker-linux-amd64
+            adocker-linux-arm64
+            adocker-darwin-amd64
+            adocker-darwin-arm64
+            checksums.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
